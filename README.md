@@ -1,12 +1,7 @@
 # FMP-semi-structured
 
-Preparing FMP news articles with variant type, metadata tagging, and data agents
+This repo is to record the development of a lakehouse on AWS that uses Financial Modeling Prep data. The data will be semi-structured, AI agents will enhance is with metadata for other AI applications, and AI agents can answer questions about the articles.
 
-Refer to this article for direction:
-https://medium.com/@justin.s.ngai/the-medallion-silver-layer-for-rag-data-preparation-c5d20267a079
+Why FMP? It's used by credible organizations such as Citadel and Harvard.
 
-Why FMP? Used by credible companies like Citadel and Harvard
-
-Why semi-structured and variant type? Balance between DW world and LLMs handling unstructured data
-
-Why metadata tagging and data agents? Prepares data for RAG, uses AI agents for prep
+Why semi-structured data? This is a balance between LLMs (unlike previous NLP) being better at handling text, and DW methodologies being build primarily on structured data.
