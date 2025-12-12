@@ -11,3 +11,4 @@ Why semi-structured data? This is a balance between LLMs (unlike previous NLP) b
 **Developments**
 
 - Built a lambda function that gets FMP news articles and writes them to an S3 bucket
+- Notebook that puts data into dataframe, uses small language model to add more context
