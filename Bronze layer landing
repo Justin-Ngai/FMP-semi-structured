@@ -1,60 +1,81 @@
+"""
+Fetch articles from Financial Modeling Prep API and store in S3 with date partitioning.
+
+Environment Variables:
+    FMP_API_KEY: API key for financialmodelingprep.com
+    S3_BUCKET_NAME: Target S3 bucket
+    ARTICLES_LIMIT: Number of articles per fetch (default: 50)
+"""
+
 import json
 import os
+import logging
+from datetime import datetime, timezone
+
 import boto3
 import urllib3
-from datetime import datetime
 
-# Initialize S3 and HTTP client outside handler for connection reuse
+# Initialize clients outside handler for reuse
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 s3 = boto3.client('s3')
-http = urllib3.PoolManager()
+http = urllib3.PoolManager(timeout=30.0, retries=urllib3.Retry(total=3))
+
 
 def lambda_handler(event, context):
-    # 1. Configuration
-    api_key = #os.environ.get('FMP_API_KEY') #'8a3RRtooAiZzAdP5QSaBEPs8PB87rjqD' 
-    bucket_name = os.environ.get('S3_BUCKET_NAME') #'raw-us-east-1-jngai-dev'
+    # Configuration
+    api_key = os.environ.get('FMP_API_KEY')
+    bucket = os.environ.get('S3_BUCKET_NAME')
+    limit = os.environ.get('ARTICLES_LIMIT', '50')
     
-    if not api_key or not bucket_name:
-        return {
-            'statusCode': 500,
-            'body': json.dumps('Error: Missing FMP_API_KEY or S3_BUCKET_NAME.')
-        }
-#
-    # 2. Fetch Data (Stable Endpoint, Limit 3)
-    url = f"https://financialmodelingprep.com/stable/fmp-articles?page=0&limit=3&apikey={api_key}"
-    print(f"Fetching from: {url.replace(api_key, 'HIDDEN')}")
-
+    if not api_key or not bucket:
+        logger.error("Missing FMP_API_KEY or S3_BUCKET_NAME")
+        return {'statusCode': 500, 'body': json.dumps('Missing required configuration')}
+    
+    # Fetch articles
+    url = f"https://financialmodelingprep.com/stable/fmp-articles?page=0&limit={limit}&apikey={api_key}"
+    logger.info(f"Fetching {limit} articles")
+    
     try:
         response = http.request('GET', url)
-        
         if response.status != 200:
-            print(f"API Error: {response.status} - {response.data.decode('utf-8')}")
-            return {'statusCode': response.status, 'body': "Failed to fetch data."}
-            
-        # Parse data to ensure it is valid JSON before saving
-        data = json.loads(response.data.decode('utf-8'))
+            logger.error(f"API error: {response.status}")
+            return {'statusCode': response.status, 'body': 'API request failed'}
         
+        articles = json.loads(response.data.decode('utf-8'))
+        
+        if not articles:
+            logger.info("No articles returned")
+            return {'statusCode': 200, 'body': json.dumps('No articles found')}
+            
     except Exception as e:
-        print(f"Fetch Exception: {str(e)}")
-        return {'statusCode': 500, 'body': f"Error fetching data: {str(e)}"}
-
-    # 3. Save to S3
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    file_name = f"fmp_articles_{timestamp}.json"
+        logger.error(f"Fetch error: {e}")
+        return {'statusCode': 502, 'body': json.dumps(f'Error fetching data: {str(e)}')}
+    
+    # Save to S3 with date partitioning
+    now = datetime.now(timezone.utc)
+    s3_key = (
+        f"year={now.year}/month={now.month:02d}/day={now.day:02d}/"
+        f"fmp_articles_{now.strftime('%Y-%m-%d_%H-%M-%S')}.json"
+    )
     
     try:
         s3.put_object(
-            Bucket=bucket_name,
-            Key=file_name,
-            Body=json.dumps(data),
+            Bucket=bucket,
+            Key=s3_key,
+            Body=json.dumps(articles, indent=2),
             ContentType='application/json'
         )
-        print(f"Success: Saved to s3://{bucket_name}/{file_name}")
+        logger.info(f"Saved {len(articles)} articles to s3://{bucket}/{s3_key}")
         
     except Exception as e:
-        print(f"S3 Upload Exception: {str(e)}")
-        return {'statusCode': 500, 'body': f"Error uploading to S3: {str(e)}"}
-
+        logger.error(f"S3 upload error: {e}")
+        return {'statusCode': 500, 'body': json.dumps(f'S3 upload failed: {str(e)}')}
+    
     return {
         'statusCode': 200,
-        'body': json.dumps(f"Saved {len(data)} articles to {file_name}")
+        'body': json.dumps({
+            'count': len(articles),
+            'location': f"s3://{bucket}/{s3_key}"
+        })
     }
