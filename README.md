@@ -9,4 +9,4 @@ The goal is to build an ingestion and staging layer that organizes raw, semi-str
 This project focuses on:
 - ingesting text data using AWS Lambda and scheduled jobs
 - staging semi-structured text data in AWS SageMaker Lakehouse
-- organizing raw text into an event based schema that supports making analyzing events
+- organizing text into an event based schema to support analyzing corporate actions
